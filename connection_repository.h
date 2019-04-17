@@ -1,12 +1,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#define DATABASE_FILENAME ".db"
-#define USER_POSITION 0
-#define PASSWORD_POSITION 1
-#define HOST_POSITION 2
+#include "sqlite3.h"
 
 typedef struct
 {

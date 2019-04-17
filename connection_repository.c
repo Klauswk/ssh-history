@@ -1,78 +1,6 @@
 #include "connection_repository.h"
 
-static Connection *build_connection(char **token)
-{
-    Connection *con = malloc(sizeof(Connection *));
-
-    if (token)
-    {
-        con->ip = token[HOST_POSITION];
-        con->user = token[USER_POSITION];
-        con->password = token[PASSWORD_POSITION];
-    }
-    else
-    {
-        con->user = NULL;
-        con->password = NULL;
-        con->ip = NULL;
-    }
-
-    return con;
-}
-
-static int listLength(Node *item)
-{
-    Node *cur = item;
-    int size = 0;
-
-    while (cur->next != NULL)
-    {
-        ++size;
-        cur = cur->next;
-    }
-
-    return size;
-}
-
-static Connection *str_split(char *a_str, const char a_delim)
-{
-    size_t count = 0;
-    char *tmp = a_str;
-    char *last_comma = 0;
-    char delim[2];
-    delim[0] = a_delim;
-    delim[1] = 0;
-
-    //Replace new line by end character
-    if (a_str[strlen(a_str) - 1] == '\n')
-    {
-        a_str[strlen(a_str) - 1] = '\0';
-    }
-
-    Connection *result = malloc(sizeof(Connection *));
-
-    char *newString = malloc(sizeof(char) * strlen(a_str));
-
-    strcpy(newString, a_str);
-
-    char **values = malloc(sizeof(char *) * 3);
-    if (result)
-    {
-        size_t idx = 0;
-
-        char *token = strtok(newString, delim);
-        while (token)
-        {
-            values[idx++] = token;
-            strdup(token);
-            token = strtok(0, delim);
-        }
-
-        result = build_connection(values);
-    }
-
-    return result;
-}
+int callback(void *, int, char **, char **);
 
 static void insert(Node *root, Connection *con)
 {
@@ -99,44 +27,151 @@ static void insert(Node *root, Connection *con)
     root = head;
 }
 
+int callback(void *list, int argc, char **argv,
+             char **azColName)
+{
+    Node *node = (Node*)list;
+
+    if (argc == 0)
+    {
+        printf("No connection available\n");
+        return 0;
+    }
+
+    Connection *connection = malloc(sizeof(Connection));
+
+    connection->user = argv[1];
+    connection->password = argv[2];
+    connection->ip = argv[3];
+    
+    insert(node, connection);
+
+    printf("\n%s@%s\n", node->connection->user,node->connection->password);
+
+    return 0;
+}
+
+static int createTable(sqlite3 *db)
+{
+    int rc;
+
+    char *err_msg = 0;
+
+    char *sql = "CREATE TABLE IF NOT EXISTS Users(Id INT, User TEXT, Ip TEXT, Password Text);";
+    
+    rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
+
+    if (rc != SQLITE_OK)
+    {
+
+        fprintf(stderr, "Failed to create table\n");
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+        return 1;
+    }
+}
+
+int getAndInsertUser(sqlite3 *db, Connection *connection)
+{
+
+    char *sql = "INSERT INTO Users(User,Ip,Password) VALUES(?,?,?);";
+
+    sqlite3_stmt *pStmt;
+
+    int rc = sqlite3_prepare(db, sql, -1, &pStmt, 0);
+
+    char *err_msg = 0;
+
+    if (rc != SQLITE_OK)
+    {
+
+        fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
+
+        return 1;
+    }
+
+    rc = sqlite3_bind_text(pStmt, 1, connection->user, -1, 0);
+    rc = sqlite3_bind_text(pStmt, 2, connection->ip, -1, 0);
+    rc = sqlite3_bind_text(pStmt, 3, connection->password, -1, 0);
+
+    rc = sqlite3_step(pStmt);
+
+    if (rc != SQLITE_DONE)
+    {
+
+        printf("\nExecution failed: %s\n", sqlite3_errmsg(db));
+    }
+    else
+    {
+        printf("\nSucessfull add connection\n");
+    }
+
+    sqlite3_finalize(pStmt);
+
+    return 0;
+}
+
+int getListConnections(sqlite3 *db, Node *node)
+{
+    char *sql = "SELECT * FROM Users";
+
+    char *err_msg = 0;
+
+    int rc = sqlite3_exec(db, sql, callback, node, &err_msg);
+
+    if (rc != SQLITE_OK)
+    {
+
+        fprintf(stderr, "Failed to select data\n");
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+
+        return 1;
+    }
+        
+    return 0;
+}
+
 Connection **getListOfConnections()
 {
-    if (access(DATABASE_FILENAME, 0) != -1)
-    {
-        if ((access(DATABASE_FILENAME, 4)) != -1)
-        {
-            FILE *fp = NULL;
-            size_t len = 255;
-            char *line = malloc(sizeof(char) * len);
-            Node *node = malloc(sizeof(Node));
+    sqlite3 *db;
+    char *err_msg = 0;
+    int rc;
+    //rc = sqlite3_open(":memory:", &db);
 
-            fp = fopen(DATABASE_FILENAME, "r");
+    rc = sqlite3_open(".db", &db);
 
-            node->connection = NULL;
-            node->next = NULL;
+    if (rc != SQLITE_OK) {
 
-            while (fgets(line, len, fp) != NULL)
-            {
-                insert(node, str_split(line, ';'));
-            }
-
-            int listSize = listLength(node);
-            
-            Connection **connections = malloc(sizeof(Connection *) * listSize);
-            
-            for(int i =0 ; i < listSize; i++) {
-                connections[i] = node->connection;
-
-                node = node->next;
-            }
-
-            return connections;
-        }
-        else
-            printf("Database has been found, but can't be read\n");
+        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
 
         return NULL;
     }
+
+    if(createTable(db) == 1){
+        return NULL;
+    }
+    
+    Node *node = malloc(sizeof(Node));
+    node->connection = NULL;
+    node->next = NULL;
+
+    getListConnections(db, node);
+    
+    printf("\n%s@%s\n", node->connection->user,node->connection->password);
+    /*Connection *connection = malloc(sizeof(Connection));
+
+    connection->user = "user1";
+    connection->password = "blabla";
+    connection->ip = "test.com";
+
+    getAndInsertUser(db,connection);*/
+
+    sqlite3_close(db);
 }
 
 Connection *getConnection(Connection *connections)

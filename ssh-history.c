@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <sodium.h>
 #include "crypt.h"
+#include "connection_repository.h"
 
 #define GetCurrentDir getcwd
 #define SODIUM_STATIC =1
@@ -12,7 +13,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
- int opterr = 0;
     int listFlag = 0;
     int addFlag = 0;
     int connectFlag = 0;
@@ -36,8 +36,6 @@ int main(int argc, char **argv) {
         case '?':
             if (optopt == 'a' || optopt == 'e')
                 fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-            else if (isprint(optopt))
-                fprintf(stderr, "Unknown option `-%c'.\n", optopt);
             else
                 fprintf(stderr,
                         "Unknown option character `\\x%x'.\n",
@@ -52,17 +50,32 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    #ifdef _WIN32  
-        char buff[FILENAME_MAX];
-        GetCurrentDir( buff, FILENAME_MAX );
-        strcat(buff,"\\bin\\putty.exe -ssh  root@example.com -pw gg");
-        printf("%s",buff);
-        system(buff);
-    #endif
-    #ifdef linux
-        char* params[] = {"plink","-ssh","root@example.com", "-pw", "gg",NULL};
-        execvp("./bin/plink",params);
-    #endif
+    if(listFlag == 1) {
+        /*unsigned char *password = "dasdsa";
+        unsigned char *decrypt = "";
+        decrypt_password(password,&decrypt);
+
+        printf("\nRetorno da lib: %s", decrypt);*/
+
+        getListOfConnections();
+        return 0;
+    }
+
+    if(connectFlag == 1) {
+        #ifdef _WIN32  
+            char buff[FILENAME_MAX];
+            GetCurrentDir( buff, FILENAME_MAX );
+            strcat(buff,"\\bin\\putty.exe -ssh  root@example.com -pw gg");
+            strcat(buff,sshConnection);
+            printf("%s",buff);
+            system(buff);
+        #endif
+        #ifdef linux
+            char* params[] = {"plink","-ssh",sshConnection, "-pw", "gg",NULL};
+            execvp("./bin/plink",params);
+        #endif
+
+    }
     
     return 0;
 }

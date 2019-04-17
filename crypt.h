@@ -3,4 +3,4 @@
 #include <sodium.h>
 #include <string.h>
 
-void decrypt_password(unsigned char *password, unsigned char *decrypted);
+void decrypt_password(unsigned char *password, unsigned char **decrypted);

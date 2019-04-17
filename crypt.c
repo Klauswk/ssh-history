@@ -44,13 +44,13 @@ static void get_password(unsigned char *password, unsigned char key[], unsigned 
     
 }
 
-void decrypt_password(unsigned char *password, unsigned char *decrypted) {
+void decrypt_password(unsigned char *password, unsigned char **decrypted) {
     unsigned char *key = malloc(crypto_secretbox_KEYBYTES * sizeof(unsigned char *));
 
     get_key(key);
-    get_password(password,key,&decrypted);
+    get_password(password,key,decrypted);
 
-    printf("Decode: %s", decrypted);
+    printf("Decode: %s", *decrypted);
     
 }
 
