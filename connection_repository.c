@@ -1,6 +1,6 @@
 #include "connection_repository.h"
 
-int callback(void *, int, char **, char **);
+static int callback(void *, int, char **, char **);
 
 static void insert(Node *root, Connection *con)
 {
@@ -27,26 +27,28 @@ static void insert(Node *root, Connection *con)
     root = head;
 }
 
-int callback(void *list, int argc, char **argv,
-             char **azColName)
+static int callback(void *list, int numberOfColumns, char **columnValues,
+                    char **columnNames)
 {
-    Node *node = (Node*)list;
+    Node *node = (Node *)list;
 
-    if (argc == 0)
+    if (numberOfColumns == 0)
     {
-        printf("No connection available\n");
         return 0;
     }
 
     Connection *connection = malloc(sizeof(Connection));
 
-    connection->user = argv[1];
-    connection->password = argv[2];
-    connection->ip = argv[3];
-    
-    insert(node, connection);
+    connection->id = strdup(columnValues[ID_COLUMNN]);
+    connection->user = strdup(columnValues[USER_COLUMNN]);
+    connection->ip = strdup(columnValues[IP_COLUMNN]);
 
-    printf("\n%s@%s\n", node->connection->user,node->connection->password);
+    if (columnValues[3] != NULL)
+    {
+        connection->password = strdup(columnValues[PASSWORD_COLUMNN]);
+    }
+
+    insert(node, connection);
 
     return 0;
 }
@@ -57,8 +59,8 @@ static int createTable(sqlite3 *db)
 
     char *err_msg = 0;
 
-    char *sql = "CREATE TABLE IF NOT EXISTS Users(Id INT, User TEXT, Ip TEXT, Password Text);";
-    
+    char *sql = "CREATE TABLE IF NOT EXISTS Users(Id INTEGER PRIMARY KEY, User TEXT NOT NULL, Ip TEXT NOT NULL, Password BLOB);";
+
     rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
 
     if (rc != SQLITE_OK)
@@ -72,8 +74,177 @@ static int createTable(sqlite3 *db)
     }
 }
 
-int getAndInsertUser(sqlite3 *db, Connection *connection)
+static size_t listLength(Node *item)
 {
+    Node *cur = item;
+    size_t size = 0;
+
+    if(cur->connection != NULL) {
+        ++size;
+    }
+
+    while (cur->next != NULL)
+    {
+        ++size;
+
+        cur = cur->next;
+    }
+
+    return size;
+}
+
+static int getListConnections(sqlite3 *db, Node *node)
+{
+    char *sql = "SELECT Id, User, Ip, Password FROM Users";
+
+    char *err_msg = 0;
+
+    int rc = sqlite3_exec(db, sql, callback, node, &err_msg);
+
+    if (rc != SQLITE_OK)
+    {
+        fprintf(stderr, "Failed to select data\n");
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static sqlite3 *openAndCreateDb()
+{
+    sqlite3 *db;
+    char *err_msg = 0;
+    int rc;
+    //rc = sqlite3_open(":memory:", &db);
+
+    rc = sqlite3_open(".db", &db);
+
+    if (rc != SQLITE_OK)
+    {
+
+        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+
+        return NULL;
+    }
+
+    if (createTable(db) == 1)
+    {
+        return NULL;
+    }
+
+    return db;
+}
+
+static Connection **fromNodeToList(Node *node, size_t *size)
+{
+    size_t listSize = listLength(node);
+
+    Connection **connections = malloc(sizeof(Connection *) * listSize);
+
+    for (int i = 0; i < listSize; i++)
+    {
+        connections[i] = node->connection;
+
+        node = node->next;
+    }
+
+    *size = listSize;
+
+    return connections;
+}
+
+Connection **getListOfConnections(size_t *size)
+{
+    sqlite3 *db = openAndCreateDb();
+
+    Node *node = malloc(sizeof(Node));
+    node->connection = NULL;
+    node->next = NULL;
+
+    getListConnections(db, node);
+
+    sqlite3_close(db);
+
+    return fromNodeToList(node, size);
+}
+
+Connection *getConnection(Connection *connection)
+{
+    sqlite3 *db = openAndCreateDb();
+
+    char *sql = "SELECT Id, User, Ip, Password FROM Users where Id = ?";
+
+    sqlite3_stmt *pStmt;
+
+    char *err_msg = 0;
+
+    int rc = sqlite3_prepare_v3(db, sql, -1, 0, &pStmt, 0);
+
+    if (rc != SQLITE_OK)
+        printf("SQL error on line:%d msg:%s \n", __LINE__, sqlite3_errmsg(db));
+
+    rc = sqlite3_bind_text(pStmt, 1, connection->id, -1, 0);
+
+    do
+    {
+        rc = sqlite3_step(pStmt);
+        switch (rc)
+        {
+        case SQLITE_DONE:
+            break;
+
+        case SQLITE_ROW:
+        {
+            int size = sqlite3_column_count(pStmt);
+
+            for (int i = 0; i < size; i++)
+            {
+                char *value = NULL;
+
+                if(i == PASSWORD_COLUMNN) {
+                    value = sqlite3_column_blob(pStmt, i);
+                } else {
+                    value = sqlite3_column_text(pStmt, i);
+                }
+                printf("Column %d: %s\n", i, value);
+
+                switch (i)
+                {
+                case ID_COLUMNN:
+                    break;
+                case USER_COLUMNN:
+                    connection->user = strdup(value);
+                    break;
+                case IP_COLUMNN:
+                    connection->ip = strdup(value);
+                    break;
+                case PASSWORD_COLUMNN:
+                    connection->password = strdup(value);
+                    break;
+                }
+            }
+        }
+        break;
+
+        default:
+            break;
+        }
+    } while (rc == SQLITE_ROW);
+
+    sqlite3_close(db);
+
+    return 0;
+}
+
+Connection *addConnection(Connection *connection)
+{
+    sqlite3 *db = openAndCreateDb();
 
     char *sql = "INSERT INTO Users(User,Ip,Password) VALUES(?,?,?);";
 
@@ -88,7 +259,7 @@ int getAndInsertUser(sqlite3 *db, Connection *connection)
 
         fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
 
-        return 1;
+        return NULL;
     }
 
     rc = sqlite3_bind_text(pStmt, 1, connection->user, -1, 0);
@@ -99,88 +270,13 @@ int getAndInsertUser(sqlite3 *db, Connection *connection)
 
     if (rc != SQLITE_DONE)
     {
-
         printf("\nExecution failed: %s\n", sqlite3_errmsg(db));
-    }
-    else
-    {
-        printf("\nSucessfull add connection\n");
+        return NULL;
     }
 
     sqlite3_finalize(pStmt);
 
-    return 0;
-}
-
-int getListConnections(sqlite3 *db, Node *node)
-{
-    char *sql = "SELECT * FROM Users";
-
-    char *err_msg = 0;
-
-    int rc = sqlite3_exec(db, sql, callback, node, &err_msg);
-
-    if (rc != SQLITE_OK)
-    {
-
-        fprintf(stderr, "Failed to select data\n");
-        fprintf(stderr, "SQL error: %s\n", err_msg);
-
-        sqlite3_free(err_msg);
-        sqlite3_close(db);
-
-        return 1;
-    }
-        
-    return 0;
-}
-
-Connection **getListOfConnections()
-{
-    sqlite3 *db;
-    char *err_msg = 0;
-    int rc;
-    //rc = sqlite3_open(":memory:", &db);
-
-    rc = sqlite3_open(".db", &db);
-
-    if (rc != SQLITE_OK) {
-
-        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
-        sqlite3_close(db);
-
-        return NULL;
-    }
-
-    if(createTable(db) == 1){
-        return NULL;
-    }
-    
-    Node *node = malloc(sizeof(Node));
-    node->connection = NULL;
-    node->next = NULL;
-
-    getListConnections(db, node);
-    
-    printf("\n%s@%s\n", node->connection->user,node->connection->password);
-    /*Connection *connection = malloc(sizeof(Connection));
-
-    connection->user = "user1";
-    connection->password = "blabla";
-    connection->ip = "test.com";
-
-    getAndInsertUser(db,connection);*/
-
-    sqlite3_close(db);
-}
-
-Connection *getConnection(Connection *connections)
-{
-    
-}
-
-Connection *addConnection(Connection *connection)
-{
+    return connection;
 }
 
 Connection *removeConnection(Connection *connection)

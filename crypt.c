@@ -30,18 +30,32 @@ static void get_key(unsigned char *key)
 
 static void get_password(unsigned char *password, unsigned char key[], unsigned char **decrypted) {
     char nonce[crypto_secretbox_NONCEBYTES];
-    int messageLength = strlen(password);
-    int cipherTextLength = crypto_secretbox_MACBYTES + messageLength;
-    char ciphertext[cipherTextLength];
+    int messageLength = crypto_secretbox_MACBYTES + 128;
     *decrypted = malloc(messageLength * sizeof(char));
 
     randombytes_buf(nonce, sizeof nonce);
-    crypto_secretbox_easy(ciphertext, password, messageLength, nonce, key);
 
-    if (crypto_secretbox_open_easy(*decrypted, ciphertext, cipherTextLength, nonce, key) != 0) {
+    if (crypto_secretbox_open_easy(*decrypted, messageLength, strlen(password), nonce, key) != 0) {
+        printf("\nError decrypting password \n");
         exit(-1);
     }
+    printf("\n\n decrypted : %s",decrypted);    
+}
+
+void encrypt_password(unsigned char **password) {
+    unsigned char *key = malloc(crypto_secretbox_KEYBYTES * sizeof(unsigned char *));
+
+    get_key(key);
     
+    char nonce[crypto_secretbox_NONCEBYTES];
+    int messageLength = 128;
+    int cipherTextLength = crypto_secretbox_MACBYTES + 128;
+    char ciphertext[cipherTextLength];
+    
+    randombytes_buf(nonce, sizeof nonce);
+    crypto_secretbox_easy(ciphertext, *password, messageLength, nonce, key);
+
+    *password = strdup(ciphertext);
 }
 
 void decrypt_password(unsigned char *password, unsigned char **decrypted) {
@@ -50,7 +64,7 @@ void decrypt_password(unsigned char *password, unsigned char **decrypted) {
     get_key(key);
     get_password(password,key,decrypted);
 
-    printf("Decode: %s", *decrypted);
+    printf("\nDecode: %s", *decrypted);
     
 }
 
