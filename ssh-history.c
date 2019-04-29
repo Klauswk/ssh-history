@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sodium.h>
+#include "logger.h"
 #include "crypt.h"
 #include "connection_repository.h"
 #ifdef _WIN32
@@ -84,40 +85,43 @@ static char **splitString(char *string, const char *token, size_t *size)
 
 static void startConnection(char *connection, char *password)
 {
-    #ifdef _WIN32
-        char buff[FILENAME_MAX];
-        GetCurrentDir(buff, FILENAME_MAX);
-        strcat(buff, "\\bin\\putty.exe -ssh ");
-        strcat(buff, connection);
-        if(password) {
-            strcat(buff,"-pw ");
-            strcat(buff,password);
-        }
-        printf("%s", buff);
-        system(buff);
-    #endif
-    #ifdef linux
-        char *params[] = {"plink", "-ssh", argv[optind], NULL};
-        execvp("./bin/plink", params);
-    #endif
+#ifdef _WIN32
+    char buff[FILENAME_MAX];
+    GetCurrentDir(buff, FILENAME_MAX);
+    strcat(buff, "\\bin\\putty.exe -ssh ");
+    strcat(buff, connection);
+    if (password)
+    {
+        strcat(buff, " -pw ");
+        strcat(buff, password);
+    }
+    log_debug("\n%s", buff);
+    system(buff);
+#endif
+#ifdef linux
+    char *params[] = {"plink", "-ssh", argv[optind], NULL};
+    execvp("./bin/plink", params);
+#endif
 }
 
 int main(int argc, char **argv)
 {
     if (sodium_init() < 0)
     {
-        printf("Couldn't find the sodium lib");
+        log_error("Couldn't find the sodium lib");
         return 1;
     }
 
     int listFlag = 0;
     int addFlag = 0;
+    int removeFlag = 0;
     int getAndConnectFlag = 0;
     char *sshConnection = NULL;
     char *id = NULL;
+    char *deleteId = NULL;
     int c;
 
-    while ((c = getopt(argc, argv, "la:c:")) != -1)
+    while ((c = getopt(argc, argv, "la:c:rm:")) != -1)
         switch (c)
         {
         case 'l':
@@ -131,13 +135,16 @@ int main(int argc, char **argv)
             getAndConnectFlag = 1;
             id = optarg;
             break;
+        case 'rm':
+            removeFlag = 1;
+            deleteId = optarg;
+            break;
         case '?':
             if (optopt == 'a')
-                fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+                log_error("Option -%c requires an argument.\n", optopt);
             else
-                fprintf(stderr,
-                        "Unknown option character `\\x%x'.\n",
-                        optopt);
+                log_error("Unknown option character `\\x%x'.\n",
+                          optopt);
             exit(1);
         default:
             exit(1);
@@ -145,7 +152,19 @@ int main(int argc, char **argv)
 
     if (listFlag == 1 && addFlag == 1)
     {
-        printf("Can't list and add at the same time \n");
+        log_info("Can't list and add at the same time \n");
+        exit(1);
+    }
+
+    if (listFlag == 1 && removeFlag == 1)
+    {
+        log_info("Can't list and remove at the same time \n");
+        exit(1);
+    }
+
+    if (listFlag == 1 && getAndConnectFlag == 1)
+    {
+        log_info("Can't list and connect at the same time \n");
         exit(1);
     }
 
@@ -164,7 +183,7 @@ int main(int argc, char **argv)
 
         printf("\nType your password or ENTER to leave blank\n");
         setStdinEcho(0);
-        if (fgets(password, sizeof password, stdin) != NULL)
+        if (fgets(password, 512, stdin) != NULL)
         {
             size_t len = strlen(password);
             if (len > 0 && password[len - 1] == '\n')
@@ -172,6 +191,7 @@ int main(int argc, char **argv)
                 password[--len] = '\0';
             }
         }
+        setStdinEcho(1);
 
         if (strlen(password) > 0)
         {
@@ -182,9 +202,29 @@ int main(int argc, char **argv)
         {
             connection->password = "";
         }
-        setStdinEcho(1);
         addConnection(connection);
 
+        return 0;
+    }
+
+    if (removeFlag == 1)
+    {
+        Connection *connection = malloc(sizeof(Connection));
+        connection->id = deleteId;
+        getConnection(connection);
+
+        printf("\nDo you want to remove the following connection? \n Id: %s  \t User: %s \t Ip: %s \n (Y)es or (N)o: ",
+               connection->id, connection->user, connection->ip);
+
+        unsigned char *userInput = malloc(sizeof(char) * 2);
+        
+        fgets(userInput, 2, stdin);
+        
+        tolower(userInput[0]);
+
+        if(userInput[0] == 'y') {
+           return removeConnection(connection);
+        }
         return 0;
     }
 
@@ -204,20 +244,19 @@ int main(int argc, char **argv)
         connection->id = id;
         getConnection(connection);
 
-        printf("\nId: %s  \t User: %s \t Ip: %s \t Password: %s",
-               connection->id, connection->user, connection->ip, connection->password);
-               
-        char stringConnection[FILENAME_MAX];
+        log_debug("\nId: %s  \t User: %s \t Ip: %s \t Password: %s",
+                  connection->id, connection->user, connection->ip, connection->password);
+
+        char stringConnection[FILENAME_MAX] = "";
         unsigned char *decryptPassword = NULL;
 
-        if(connection->password) {
+        if (connection->password)
+        {
             decryptPassword = malloc(sizeof(char) * 512);
             decrypt_password(connection->password, &decryptPassword);
 
-            printf("\n decrypted password: %s", decryptPassword);
+            log_debug("\ndecode: %s", decryptPassword);
         }
-        
-        return 0;
 
         strcat(stringConnection, connection->user);
         strcat(stringConnection, "@");

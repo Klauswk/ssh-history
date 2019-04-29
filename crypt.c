@@ -1,4 +1,17 @@
 #include "crypt.h"
+#include "logger.h"
+
+const static char NOUNCE[crypto_secretbox_KEYBYTES] 
+            = {0x7E,0x31,0xE5,0x9B,0x6E,0x14,0x44,0x97,0x95,0x93, 0x4A, 0x14, 0x95, 0x6E, 0xC4, 0x5B, 0xD5, 0xDE, 0x3F, 0x29, 0x19, 0x26, 0x6F, 0x1E};
+
+static void dump_hex_buff(unsigned char buf[], unsigned int len)
+{
+    log_debug("\n");
+    int i;
+    for (i = 0; i < len; i++)
+        log_debug("%02X ", buf[i]);
+    log_debug("\n");
+}
 
 static void get_key(unsigned char *key)
 {
@@ -11,10 +24,10 @@ static void get_key(unsigned char *key)
             fgets(key, crypto_secretbox_KEYBYTES, (FILE*)fp);
 
         } else
-            printf("Key has been found, but can't be read\n");
+            log_debug("Key has been found, but can't be read\n");
     }
     else {
-        printf("Generating key");
+        log_debug("Generating key");
 
         FILE *fp = NULL;
 
@@ -28,50 +41,31 @@ static void get_key(unsigned char *key)
     }
 }
 
-static void get_password(unsigned char *password, unsigned char key[], unsigned char **decrypted) {
-    char nonce[crypto_secretbox_NONCEBYTES];
-    int messageLength = crypto_secretbox_MACBYTES + 128;
-    *decrypted = malloc(messageLength * sizeof(char));
-
-    randombytes_buf(nonce, sizeof nonce);
-
-    if (crypto_secretbox_open_easy(*decrypted, messageLength, strlen(password), nonce, key) != 0) {
-        printf("\nError decrypting password \n");
-        exit(-1);
-    }
-    printf("\n\n decrypted : %s",decrypted);    
-}
-
 void encrypt_password(unsigned char **password) {
     unsigned char *key = malloc(crypto_secretbox_KEYBYTES * sizeof(unsigned char *));
 
     get_key(key);
     
-    char nonce[crypto_secretbox_NONCEBYTES];
-    int messageLength = 128;
-    int cipherTextLength = crypto_secretbox_MACBYTES + 128;
+    int messageLength = strlen(*password);
+    int cipherTextLength = crypto_secretbox_MACBYTES + messageLength;
     char ciphertext[cipherTextLength];
     
-    randombytes_buf(nonce, sizeof nonce);
-    crypto_secretbox_easy(ciphertext, *password, messageLength, nonce, key);
+    crypto_secretbox_easy(ciphertext, *password, messageLength, NOUNCE, key);
 
     *password = strdup(ciphertext);
+
 }
 
 void decrypt_password(unsigned char *password, unsigned char **decrypted) {
     unsigned char *key = malloc(crypto_secretbox_KEYBYTES * sizeof(unsigned char *));
 
     get_key(key);
-    get_password(password,key,decrypted);
-
-    printf("\nDecode: %s", *decrypted);
     
-}
+    int messageLength = strlen(password);
+     *decrypted = malloc(messageLength * sizeof(char));
 
-static void dump_hex_buff(unsigned char buf[], unsigned int len)
-{
-    int i;
-    for (i = 0; i < len; i++)
-        printf("%02X ", buf[i]);
-    printf("\n");
+    if (crypto_secretbox_open_easy(*decrypted, password, messageLength, NOUNCE, key) != 0) {
+        log_debug("\nError");
+        exit(-1);
+    }
 }

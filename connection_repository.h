@@ -28,4 +28,4 @@ Connection *getConnection(Connection* connection);
 
 Connection *addConnection(Connection* connection);
 
-Connection *removeConnection(Connection* connection);
+int removeConnection(Connection* connection);

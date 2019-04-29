@@ -1,4 +1,5 @@
 #include "connection_repository.h"
+#include "logger.h"
 
 static int callback(void *, int, char **, char **);
 
@@ -65,13 +66,14 @@ static int createTable(sqlite3 *db)
 
     if (rc != SQLITE_OK)
     {
-
-        fprintf(stderr, "Failed to create table\n");
-        fprintf(stderr, "SQL error: %s\n", err_msg);
+        log_error("Failed to create table\n");
+        log_error("SQL error: %s\n", err_msg);
         sqlite3_free(err_msg);
         sqlite3_close(db);
         return 1;
     }
+
+    log_debug("Sucessfully load/created database");
 }
 
 static size_t listLength(Node *item)
@@ -103,8 +105,8 @@ static int getListConnections(sqlite3 *db, Node *node)
 
     if (rc != SQLITE_OK)
     {
-        fprintf(stderr, "Failed to select data\n");
-        fprintf(stderr, "SQL error: %s\n", err_msg);
+        log_error("Failed to select data\n");
+        log_error("SQL error: %s\n", err_msg);
 
         sqlite3_free(err_msg);
         sqlite3_close(db);
@@ -127,7 +129,7 @@ static sqlite3 *openAndCreateDb()
     if (rc != SQLITE_OK)
     {
 
-        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+        log_error("Cannot open database: %s\n", sqlite3_errmsg(db));
         sqlite3_close(db);
 
         return NULL;
@@ -187,7 +189,7 @@ Connection *getConnection(Connection *connection)
     int rc = sqlite3_prepare_v3(db, sql, -1, 0, &pStmt, 0);
 
     if (rc != SQLITE_OK)
-        printf("SQL error on line:%d msg:%s \n", __LINE__, sqlite3_errmsg(db));
+        log_error("SQL error on line:%d msg:%s \n", __LINE__, sqlite3_errmsg(db));
 
     rc = sqlite3_bind_text(pStmt, 1, connection->id, -1, 0);
 
@@ -212,7 +214,7 @@ Connection *getConnection(Connection *connection)
                 } else {
                     value = sqlite3_column_text(pStmt, i);
                 }
-                printf("Column %d: %s\n", i, value);
+                log_debug("Column %d: %s\n", i, value);
 
                 switch (i)
                 {
@@ -257,7 +259,7 @@ Connection *addConnection(Connection *connection)
     if (rc != SQLITE_OK)
     {
 
-        fprintf(stderr, "Cannot prepare statement: %s\n", sqlite3_errmsg(db));
+        log_error("Cannot prepare statement: %s\n", sqlite3_errmsg(db));
 
         return NULL;
     }
@@ -270,7 +272,7 @@ Connection *addConnection(Connection *connection)
 
     if (rc != SQLITE_DONE)
     {
-        printf("\nExecution failed: %s\n", sqlite3_errmsg(db));
+        log_error("\nExecution failed: %s\n", sqlite3_errmsg(db));
         return NULL;
     }
 
@@ -279,6 +281,39 @@ Connection *addConnection(Connection *connection)
     return connection;
 }
 
-Connection *removeConnection(Connection *connection)
+int removeConnection(Connection *connection)
 {
+    sqlite3 *db = openAndCreateDb();
+
+    char *sql = "delete from Users where Id = ?";
+
+    sqlite3_stmt *pStmt;
+
+    int rc = sqlite3_prepare(db, sql, -1, &pStmt, 0);
+
+    char *err_msg = 0;
+
+    if (rc != SQLITE_OK)
+    {
+
+        log_error("Cannot prepare statement: %s\n", sqlite3_errmsg(db));
+
+        return 1;
+    }
+
+    rc = sqlite3_bind_text(pStmt, 1, connection->id, -1, 0);
+    
+    rc = sqlite3_step(pStmt);
+
+    if (rc != SQLITE_DONE)
+    {
+        log_error("\nExecution failed: %s\n", sqlite3_errmsg(db));
+        return 1;
+    }
+
+    sqlite3_finalize(pStmt);
+
+    printf("Connection %s successfully remove.", connection->id);
+
+    return 0;
 }
