@@ -121,7 +121,7 @@ int main(int argc, char **argv)
     char *deleteId = NULL;
     int c;
 
-    while ((c = getopt(argc, argv, "la:c:rm:")) != -1)
+    while ((c = getopt(argc, argv, "la:c:r:")) != -1)
         switch (c)
         {
         case 'l':
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
             getAndConnectFlag = 1;
             id = optarg;
             break;
-        case 'rm':
+        case 'r':
             removeFlag = 1;
             deleteId = optarg;
             break;
