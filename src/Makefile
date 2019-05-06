@@ -8,7 +8,7 @@ TARGET_DIR = ./../target/
 default: ssh-history
 
 ssh-history: ssh-history.c logger.o crypt.o connection_repository.o
-	$(CC) -o ${TARGET_DIR}$@ ${TARGET_DIR}logger.o ${TARGET_DIR}crypt.o ${TARGET_DIR}connection_repository.o ssh-history.c ${CFLAGS} ${LDFLAGS} ./../sqlite3.dll -static -lsodium
+	$(CC) -o ${TARGET_DIR}$@ ${TARGET_DIR}logger.o ${TARGET_DIR}crypt.o ${TARGET_DIR}connection_repository.o ssh-history.c ./../sqlite3.dll -static -lsodium
 	
 logger.o: logger.c
 	$(CC) -o ${TARGET_DIR}$@ ${PROGRAM_ARGS} -c $^
