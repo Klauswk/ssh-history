@@ -83,8 +83,86 @@ static char **splitString(char *string, const char *token, size_t *size)
     return splitedString;
 }
 
+static void appendToHistory(char *connection)
+{
+    if (connection)
+    {
+        time_t now;
+        time(&now);
+        char *date = ctime(&now);
+        date[strlen(date) - 1] = '\0';
+
+        FILE *fp = NULL;
+
+        fp = fopen(".history", "a");
+
+        fprintf(fp, "\n%s \t %s", date, connection);
+
+        fclose(fp);
+    }
+    else
+    {
+        log_debug("Empty connection, not adding to history");
+    }
+}
+
+static void reversePrint(char str[512])
+{
+    char temp;
+    int i = 0;
+    int j = strlen(str) - 1;
+
+    while (i < j)
+    {
+        temp = str[i];
+        str[i] = str[j];
+        str[j] = temp;
+        i++;
+        j--;
+    }
+
+    printf("%s", str);
+}
+
+static void readHistory()
+{
+    FILE *in;
+    int count = 0;
+    long int pos;
+    int stringPosition = 0;
+    char s[512];
+    char c = '\n';
+    in = fopen(".history", "r");
+    if (in == NULL)
+    {
+        perror("fopen");
+        exit(EXIT_FAILURE);
+    }
+
+    fseek(in, 0, SEEK_END);
+    pos = ftell(in);
+    while (pos)
+    {
+        fseek(in, --pos, SEEK_SET); /* seek from begin */
+        c = fgetc(in);
+        s[stringPosition++] = c;
+        if (c == '\n' || pos == 0)
+        {
+            reversePrint(s);
+            stringPosition = 0;
+            memset(s, 0, sizeof s);
+            if (count++ == 10)
+            {
+                return;
+            }
+        }
+    }
+    fclose(in);
+}
+
 static void startConnection(char *connection, char *password)
 {
+    appendToHistory(connection);
 #ifdef _WIN32
     char buff[FILENAME_MAX];
     GetCurrentDir(buff, FILENAME_MAX);
@@ -115,13 +193,14 @@ int main(int argc, char **argv)
     int listFlag = 0;
     int addFlag = 0;
     int removeFlag = 0;
+    int historyFlag = 0;
     int getAndConnectFlag = 0;
     char *sshConnection = NULL;
     char *id = NULL;
     char *deleteId = NULL;
     int c;
 
-    while ((c = getopt(argc, argv, "la:c:r:")) != -1)
+    while ((c = getopt(argc, argv, "la:c:r:h")) != -1)
         switch (c)
         {
         case 'l':
@@ -139,6 +218,9 @@ int main(int argc, char **argv)
             removeFlag = 1;
             deleteId = optarg;
             break;
+        case 'h':
+            historyFlag = 1;
+            break;
         case '?':
             if (optopt == 'a')
                 log_error("Option -%c requires an argument.\n", optopt);
@@ -149,6 +231,12 @@ int main(int argc, char **argv)
         default:
             exit(1);
         }
+
+    if (historyFlag == 1)
+    {
+        readHistory();
+        exit(1);
+    }
 
     if (listFlag == 1 && addFlag == 1)
     {
@@ -217,13 +305,14 @@ int main(int argc, char **argv)
                connection->id, connection->user, connection->ip);
 
         unsigned char *userInput = malloc(sizeof(char) * 2);
-        
+
         fgets(userInput, 2, stdin);
-        
+
         tolower(userInput[0]);
 
-        if(userInput[0] == 'y') {
-           return removeConnection(connection);
+        if (userInput[0] == 'y')
+        {
+            return removeConnection(connection);
         }
         return 0;
     }

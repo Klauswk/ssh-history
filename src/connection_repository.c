@@ -207,7 +207,7 @@ Connection *getConnection(Connection *connection)
 
             for (int i = 0; i < size; i++)
             {
-                char *value = NULL;
+                const char *value = NULL;
 
                 if(i == PASSWORD_COLUMNN) {
                     value = sqlite3_column_blob(pStmt, i);
