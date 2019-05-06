@@ -83,7 +83,7 @@ static char **splitString(char *string, const char *token, size_t *size)
     return splitedString;
 }
 
-static void appendToHistory(char *connection)
+static void appendToHistory(char *connection, char *id)
 {
     if (connection)
     {
@@ -94,9 +94,13 @@ static void appendToHistory(char *connection)
 
         FILE *fp = NULL;
 
+        if(!id) {
+            id = "0";
+        }
+
         fp = fopen(".history", "a");
 
-        fprintf(fp, "\n%s \t %s", date, connection);
+        fprintf(fp, "\n%s\t%s\t%s", id, date, connection);
 
         fclose(fp);
     }
@@ -106,7 +110,7 @@ static void appendToHistory(char *connection)
     }
 }
 
-static void reversePrint(char str[512])
+static void reverseString(char str[512], char **inverseString)
 {
     char temp;
     int i = 0;
@@ -121,34 +125,74 @@ static void reversePrint(char str[512])
         j--;
     }
 
-    printf("%s", str);
+    if(inverseString != NULL) {
+        *inverseString = strdup(str);
+    }
 }
 
-static void readHistory()
+static void readLastHistoryLine(char **lastLine)
 {
-    FILE *in;
+    FILE *file;
     int count = 0;
     long int pos;
     int stringPosition = 0;
     char s[512];
     char c = '\n';
-    in = fopen(".history", "r");
-    if (in == NULL)
+
+    file = fopen(".history", "r");
+    if (file == NULL)
     {
         perror("fopen");
         exit(EXIT_FAILURE);
     }
 
-    fseek(in, 0, SEEK_END);
-    pos = ftell(in);
+    fseek(file, 0, SEEK_END);
+    pos = ftell(file);
     while (pos)
     {
-        fseek(in, --pos, SEEK_SET); /* seek from begin */
-        c = fgetc(in);
+        fseek(file, --pos, SEEK_SET);
+        c = fgetc(file);
+        if (c == '\n' || pos == 0)
+        {
+            reverseString(s, lastLine);
+            return;
+        }
+        s[stringPosition++] = c;
+    }
+    fclose(file);
+}
+
+static void readHistory()
+{
+    FILE *file;
+    int count = 0;
+    long int pos;
+    int stringPosition = 0;
+    char s[512];
+    char *reversedString = malloc(sizeof(char) * 512);
+    char c = '\n';
+    file = fopen(".history", "r");
+    if (file == NULL)
+    {
+        perror("fopen");
+        exit(EXIT_FAILURE);
+    }
+
+    fseek(file, 0, SEEK_END);
+    pos = ftell(file);
+    while (pos)
+    {
+        fseek(file, --pos, SEEK_SET);
+        c = fgetc(file);
         s[stringPosition++] = c;
         if (c == '\n' || pos == 0)
         {
-            reversePrint(s);
+            reverseString(s, &reversedString);
+
+            if(reversedString) {
+                printf("%s", reversedString);
+            }
+
             stringPosition = 0;
             memset(s, 0, sizeof s);
             if (count++ == 10)
@@ -157,12 +201,12 @@ static void readHistory()
             }
         }
     }
-    fclose(in);
+    fclose(file);
 }
 
-static void startConnection(char *connection, char *password)
+static void startConnection(char *connection, char *id, char *password)
 {
-    appendToHistory(connection);
+    appendToHistory(connection, id);
 #ifdef _WIN32
     char buff[FILENAME_MAX];
     GetCurrentDir(buff, FILENAME_MAX);
@@ -180,6 +224,32 @@ static void startConnection(char *connection, char *password)
     char *params[] = {"plink", "-ssh", argv[optind], NULL};
     execvp("./bin/plink", params);
 #endif
+}
+
+static void startConnectionWithId(char *id) {
+        Connection *connection = malloc(sizeof(Connection));
+        connection->id = id;
+        getConnection(connection);
+
+        log_debug("\nId: %s  \t User: %s \t Ip: %s \t Password: %s",
+                  connection->id, connection->user, connection->ip, connection->password);
+
+        char stringConnection[FILENAME_MAX] = "";
+        unsigned char *decryptPassword = NULL;
+
+        if (connection->password)
+        {
+            decryptPassword = malloc(sizeof(char) * 512);
+            decrypt_password(connection->password, &decryptPassword);
+
+            log_debug("\ndecode: %s", decryptPassword);
+        }
+
+        strcat(stringConnection, connection->user);
+        strcat(stringConnection, "@");
+        strcat(stringConnection, connection->ip);
+
+        startConnection(stringConnection, connection->id, decryptPassword);
 }
 
 int main(int argc, char **argv)
@@ -329,33 +399,34 @@ int main(int argc, char **argv)
 
     if (getAndConnectFlag == 1)
     {
-        Connection *connection = malloc(sizeof(Connection));
-        connection->id = id;
-        getConnection(connection);
-
-        log_debug("\nId: %s  \t User: %s \t Ip: %s \t Password: %s",
-                  connection->id, connection->user, connection->ip, connection->password);
-
-        char stringConnection[FILENAME_MAX] = "";
-        unsigned char *decryptPassword = NULL;
-
-        if (connection->password)
-        {
-            decryptPassword = malloc(sizeof(char) * 512);
-            decrypt_password(connection->password, &decryptPassword);
-
-            log_debug("\ndecode: %s", decryptPassword);
-        }
-
-        strcat(stringConnection, connection->user);
-        strcat(stringConnection, "@");
-        strcat(stringConnection, connection->ip);
-
-        startConnection(stringConnection, decryptPassword);
+       startConnectionWithId(id);
     }
     else if (argv[optind])
     {
-        startConnection(argv[optind], NULL);
+        startConnection(argv[optind], NULL, NULL);
+    }
+    else
+    {
+        char *lastLine = malloc(512 * sizeof(char));
+        readLastHistoryLine(&lastLine);
+        
+        if(lastLine) {
+            log_debug("Last line read: %s", lastLine);
+
+            size_t splitSize = 0;
+            char** splitedString = splitString(lastLine,"\t",&splitSize);
+
+            if(splitSize > 0) {
+                
+                if(splitedString[0][0] == '0') {
+                    log_debug("Last know connection without saving, connecting using user@id");
+                    startConnection(splitedString[2],NULL, NULL);
+                } else {
+                    log_debug("Using Id for connection");
+                    startConnectionWithId(splitedString[0]);
+                }
+            }
+        }
     }
 
     return 0;
