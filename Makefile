@@ -1,20 +1,15 @@
-CC=gcc
-LIBS=libs
-PROGRAM_ARGS= -DDEBUG_FLAG=1
-CFLAGS=$(pkg-config --cflags libsodium)
-LDFLAGS=$(pkg-config --libs libsodium)
 
-default: ssh-history
+all: prepare move_bin
+	+$(MAKE) -C src
 
-ssh-history: ssh-history.c logger.o crypt.o connection_repository.o
-	$(CC) -o $@ $^ ${CFLAGS} ${LDFLAGS} sqlite3.dll -static -lsodium
-	
-logger.o: logger.c
-	$(CC) -o $@ ${PROGRAM_ARGS} -c $^
-
-crypt.o: crypt.c
-
-connection_repository.o: connection_repository.c
-
+.PHONY: clean
 clean :
-	rm -f ssh-history ssh-history.exe crypt crypt.exe
+	rm -f target/*.o target/*.exe
+	
+.PHONY: prepare
+prepare :
+	mkdir -p target
+
+.PHONY: move_bin
+move_bin :
+	cp -r bin/ target/bin/ && cp sqlite3.dll target/ 
