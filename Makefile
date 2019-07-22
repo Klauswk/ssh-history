@@ -1,4 +1,3 @@
-
 all: prepare move_bin
 	+$(MAKE) -C src
 

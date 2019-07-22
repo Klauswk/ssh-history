@@ -207,10 +207,15 @@ static void readHistory()
 static void startConnection(char *connection, char *id, char *password)
 {
     appendToHistory(connection, id);
-#ifdef _WIN32
+#ifdef linux
+    log_debug("Starting plink connection");
+    char *params[] = {"plink", "-ssh", argv[optind], NULL};
+    execvp("./bin/plink", params);
+#else
+    log_debug("Starting putty connection");
     char buff[FILENAME_MAX];
     GetCurrentDir(buff, FILENAME_MAX);
-    strcat(buff, "\\bin\\putty.exe -ssh ");
+    strcat(buff, "/bin/putty.exe -ssh ");
     strcat(buff, connection);
     if (password)
     {
@@ -219,10 +224,6 @@ static void startConnection(char *connection, char *id, char *password)
     }
     log_debug("\n%s", buff);
     system(buff);
-#endif
-#ifdef linux
-    char *params[] = {"plink", "-ssh", argv[optind], NULL};
-    execvp("./bin/plink", params);
 #endif
 }
 

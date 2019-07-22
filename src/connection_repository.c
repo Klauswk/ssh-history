@@ -227,7 +227,8 @@ Connection *getConnection(Connection *connection)
                     connection->ip = strdup(value);
                     break;
                 case PASSWORD_COLUMNN:
-                    connection->password = strdup(value);
+                    if(value)
+                        connection->password = strdup(value);
                     break;
                 }
             }

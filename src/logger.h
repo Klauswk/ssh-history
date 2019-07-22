@@ -7,7 +7,7 @@
 #include <string.h>
 
 #ifndef DEBUG_FLAG
-#define DEBUG_FLAG 0
+#define DEBUG_FLAG 1
 
 #endif
 
