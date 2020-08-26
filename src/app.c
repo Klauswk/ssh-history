@@ -1,4 +1,4 @@
-#include <unistd.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <sodium.h>
 #include "logger.h"
@@ -261,7 +261,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    int listFlag = 0;
+    int listFlag = 1;
     int addFlag = 0;
     int removeFlag = 0;
     int historyFlag = 0;
@@ -271,7 +271,7 @@ int main(int argc, char **argv)
     char *deleteId = NULL;
     int c;
 
-    while ((c = getopt(argc, argv, "la:c:r:h")) != -1)
+    /*while ((c = getopt(argc, argv, "la:c:r:h")) != -1)
         switch (c)
         {
         case 'l':
@@ -301,7 +301,7 @@ int main(int argc, char **argv)
             exit(1);
         default:
             exit(1);
-        }
+        }*/
 
     if (historyFlag == 1)
     {
@@ -428,7 +428,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-    }
+    //}
 
     return 0;
 }

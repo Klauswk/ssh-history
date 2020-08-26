@@ -1,0 +1,7 @@
+[package]
+name = "ssh-history"
+version = "0.1.0"
+authors = ["Klaus Klein <klaus.klein@cwi.com.br>"]
+[dependencies]
+sqlite3="3.32.2"
+libsodium="1.0.18"
